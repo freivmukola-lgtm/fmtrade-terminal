@@ -112,6 +112,10 @@
       <button data-tf="3" onclick="setTF('3', this)">3 хв</button>
       <button data-tf="5" onclick="setTF('5', this)">5 хв</button>
     </div>
+    <div class="tf-row" style="margin-top:8px;">
+      <button data-tf="10" onclick="setTF('10', this)">10 хв</button>
+      <button data-tf="15" onclick="setTF('15', this)">15 хв</button>
+    </div>
 
     <div class="price-row">
       <div class="price-left"><span class="dot"></span> ПОТОЧНА ЦІНА</div>
@@ -147,8 +151,7 @@
 const tg = window.Telegram?.WebApp;
 if (tg) { tg.ready(); tg.expand(); }
 
-// !!! ЗАМІНИ НА СВІЙ РЕАЛЬНИЙ URL БЕКЕНДА, КОЛИ ВІН БУДЕ ГОТОВИЙ !!!
-const API_BASE = "https://YOUR-BACKEND-URL.example.com";
+const API_BASE = "https://web-production-acfff.up.railway.app";
 
 const PAIRS = {
   FOREX: ["EUR/USD","GBP/USD","USD/JPY","AUD/USD","USD/CAD","EUR/GBP"],
@@ -168,7 +171,7 @@ function setMode(m){
 
 function setTF(v, el){
   tf = v;
-  document.querySelectorAll('#tfRow button').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.tf-row button').forEach(b=>b.classList.remove('active'));
   el.classList.add('active');
 }
 
@@ -184,7 +187,6 @@ function fillPairs(){
 }
 
 function updatePrice(){
-  // демо-ціна поки немає реального фіду; заміниться на дані з бекенда
   const base = 1.0500 + Math.random()*0.15;
   document.getElementById('priceVal').textContent = base.toFixed(5);
 }
@@ -207,7 +209,6 @@ async function getSignal(auto){
     renderSignal(data);
     statusEl.textContent = "";
   }catch(e){
-    // поки бекенд не підключений — показуємо демо-заглушку, щоб перевірити інтерфейс
     renderSignal(demoSignal(pair, auto));
     statusEl.textContent = "⚠ Демо-режим: бекенд ще не підключено";
   }
