@@ -81,6 +81,17 @@
   .strength i{ flex:1; height:5px; border-radius:3px; background:var(--line); }
   .strength i.on{ background:var(--gold-1); }
 
+  .confidence-row{ display:flex; align-items:center; justify-content:space-between; margin-top:14px; }
+  .confidence-label{ font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.5px; }
+  .confidence-badge{ font-size:15px; font-weight:900; padding:3px 12px; border-radius:20px; }
+  .confidence-badge.high{ background:rgba(62,207,126,0.18); color:#3ecf7e; }
+  .confidence-badge.mid{ background:rgba(232,196,45,0.18); color:#e8c42d; }
+  .confidence-badge.low{ background:rgba(147,128,127,0.18); color:var(--text-dim); }
+
+  .reasons-row{ margin-top:10px; display:flex; flex-wrap:wrap; gap:6px; }
+  .reason-tag{ font-size:10px; font-weight:700; padding:4px 9px; border-radius:8px;
+    background:var(--panel-2); border:1px solid var(--line); color:var(--text); letter-spacing:0.3px; }
+
   .status{ text-align:center; font-size:12px; color:var(--text-dim); margin-top:14px; min-height:16px; }
 
   .nav{ display:flex; justify-content:space-around; margin-top:24px; padding-top:16px; border-top:1px solid var(--line); }
@@ -100,6 +111,7 @@
     <div class="seg">
       <button class="active" data-mode="FOREX" onclick="setMode('FOREX')">FOREX</button>
       <button data-mode="OTC" onclick="setMode('OTC')">OTC</button>
+      <button data-mode="STOCKS" onclick="setMode('STOCKS')">STOCKS</button>
     </div>
 
     <label class="field-label">Торгова пара</label>
@@ -135,6 +147,11 @@
         <div><span>Час</span><b id="resTime">—</b></div>
       </div>
       <div class="strength" id="resStrength"></div>
+      <div class="confidence-row">
+        <div class="confidence-label">Впевненість</div>
+        <div class="confidence-badge" id="resConfidence">—</div>
+      </div>
+      <div class="reasons-row" id="resReasons"></div>
     </div>
 
     <div class="status" id="statusMsg"></div>
@@ -155,7 +172,8 @@ const API_BASE = "https://web-production-acfff.up.railway.app";
 
 const PAIRS = {
   FOREX: ["EUR/USD","GBP/USD","USD/JPY","AUD/USD","USD/CAD","EUR/GBP"],
-  OTC:   ["EUR/USD OTC","GBP/USD OTC","USD/JPY OTC","AUD/CAD OTC","NZD/USD OTC","EUR/JPY OTC"]
+  OTC:   ["EUR/USD OTC","GBP/USD OTC","USD/JPY OTC","AUD/CAD OTC","NZD/USD OTC","EUR/JPY OTC"],
+  STOCKS: ["Apple OTC","Tesla OTC","Nvidia OTC","Amazon OTC","Microsoft OTC","Google OTC","Intel OTC","Palantir OTC"]
 };
 
 let mode = "FOREX";
@@ -164,7 +182,7 @@ let tf = "1";
 function setMode(m){
   mode = m;
   document.querySelectorAll('.seg button').forEach(b=>b.classList.toggle('active', b.dataset.mode===m));
-  document.getElementById('modeTag').textContent = m === "OTC" ? "OTC СИГНАЛИ" : "FOREX СИГНАЛИ";
+  document.getElementById('modeTag').textContent = m === "OTC" ? "OTC СИГНАЛИ" : m === "STOCKS" ? "АКЦІЇ (OTC)" : "FOREX СИГНАЛИ";
   fillPairs();
   hideResult();
 }
@@ -216,12 +234,16 @@ async function getSignal(auto){
 
 function demoSignal(pair, auto){
   const dir = Math.random() > 0.5 ? "BUY" : "SELL";
+  const demoReasons = ["OB","FVG","RSI","MACD","Breaker"];
+  const pickedReasons = demoReasons.filter(()=>Math.random() > 0.5);
   return {
     direction: dir,
     pair: auto ? PAIRS[mode][Math.floor(Math.random()*PAIRS[mode].length)] : pair,
     expiration: tf,
     trend: dir === "BUY" ? "Висхідний" : "Низхідний",
-    strength: Math.ceil(Math.random()*4)
+    strength: Math.ceil(Math.random()*4),
+    confidence: 60 + Math.floor(Math.random()*40),
+    reasons: (pickedReasons.length ? pickedReasons : ["Structure"]).join(", ")
   };
 }
 
@@ -241,6 +263,21 @@ function renderSignal(data){
     if(i < (data.strength||3)) bar.classList.add('on');
     strengthEl.appendChild(bar);
   }
+
+  const conf = data.confidence != null ? data.confidence : 70;
+  const confEl = document.getElementById('resConfidence');
+  confEl.textContent = conf + "%";
+  confEl.className = "confidence-badge " + (conf >= 90 ? "high" : conf >= 70 ? "mid" : "low");
+
+  const reasonsEl = document.getElementById('resReasons');
+  reasonsEl.innerHTML = "";
+  const reasonsList = (data.reasons || "").split(",").map(r=>r.trim()).filter(Boolean);
+  reasonsList.forEach(r=>{
+    const tag = document.createElement('span');
+    tag.className = "reason-tag";
+    tag.textContent = r;
+    reasonsEl.appendChild(tag);
+  });
 }
 
 fillPairs();
