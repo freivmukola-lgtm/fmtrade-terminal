@@ -92,6 +92,11 @@
   .reason-tag{ font-size:10px; font-weight:700; padding:4px 9px; border-radius:8px;
     background:var(--panel-2); border:1px solid var(--line); color:var(--text); letter-spacing:0.3px; }
 
+  .chart-box{ margin-top:16px; border-radius:14px; overflow:hidden; border:1px solid var(--line);
+    height:280px; display:none; background:var(--panel-2); }
+  .chart-box.show{ display:block; }
+  .chart-note{ font-size:10px; color:var(--text-dim); text-align:center; margin-top:6px; }
+
   .status{ text-align:center; font-size:12px; color:var(--text-dim); margin-top:14px; min-height:16px; }
 
   .nav{ display:flex; justify-content:space-around; margin-top:24px; padding-top:16px; border-top:1px solid var(--line); }
@@ -152,6 +157,8 @@
         <div class="confidence-badge" id="resConfidence">—</div>
       </div>
       <div class="reasons-row" id="resReasons"></div>
+      <div class="chart-box" id="chartBox"></div>
+      <div class="chart-note" id="chartNote"></div>
     </div>
 
     <div class="status" id="statusMsg"></div>
@@ -171,8 +178,8 @@ if (tg) { tg.ready(); tg.expand(); }
 const API_BASE = "https://web-production-acfff.up.railway.app";
 
 const PAIRS = {
-  FOREX: ["EUR/USD","GBP/USD","USD/JPY","AUD/USD","USD/CAD","EUR/GBP"],
-  OTC:   ["EUR/USD OTC","GBP/USD OTC","USD/JPY OTC","AUD/CAD OTC","NZD/USD OTC","EUR/JPY OTC"],
+  FOREX: ["EUR/USD","GBP/USD","USD/JPY","AUD/USD","USD/CAD","EUR/GBP","USD/CHF","NZD/USD","EUR/JPY","GBP/JPY","EUR/CHF","AUD/JPY","EUR/AUD","GBP/CAD","CAD/JPY"],
+  OTC:   ["EUR/USD OTC","GBP/USD OTC","USD/JPY OTC","AUD/CAD OTC","NZD/USD OTC","EUR/JPY OTC","USD/CHF OTC","EUR/GBP OTC","AUD/USD OTC","USD/CAD OTC","GBP/JPY OTC","EUR/CAD OTC","AUD/JPY OTC","NZD/JPY OTC","USD/TRY OTC","USD/ZAR OTC","USD/BDT OTC","USD/PKR OTC","USD/INR OTC","USD/EGP OTC"],
   STOCKS: ["Apple OTC","Tesla OTC","Nvidia OTC","Amazon OTC","Microsoft OTC","Google OTC","Intel OTC","Palantir OTC"]
 };
 
@@ -247,6 +254,53 @@ function demoSignal(pair, auto){
   };
 }
 
+function toTVSymbol(pair, m){
+  const clean = pair.replace(" OTC", "");
+  if(m === "STOCKS"){
+    const stockMap = {
+      "Apple":"NASDAQ:AAPL", "Tesla":"NASDAQ:TSLA", "Nvidia":"NASDAQ:NVDA",
+      "Amazon":"NASDAQ:AMZN", "Microsoft":"NASDAQ:MSFT", "Google":"NASDAQ:GOOGL",
+      "Intel":"NASDAQ:INTC", "Palantir":"NYSE:PLTR"
+    };
+    return stockMap[clean] || "NASDAQ:AAPL";
+  }
+  const fx = clean.replace("/", "");
+  return "FX:" + fx;
+}
+
+function tfToInterval(t){
+  const map = {"1":"1","2":"1","3":"1","5":"5","10":"5","15":"15"};
+  return map[t] || "1";
+}
+
+function showChart(pair, m, tfVal){
+  const symbol = toTVSymbol(pair, m);
+  const interval = tfToInterval(tfVal);
+  const cfg = {
+    autosize: true,
+    symbol: symbol,
+    interval: interval,
+    timezone: "Etc/UTC",
+    theme: "dark",
+    style: "1",
+    locale: "uk",
+    toolbar_bg: "#150f10",
+    hide_top_toolbar: true,
+    hide_legend: false,
+    save_image: false,
+    backgroundColor: "#150f10",
+    gridColor: "rgba(46,27,30,0.6)",
+    allow_symbol_change: false
+  };
+  const src = "https://s.tradingview.com/embed-widget/advanced-chart/?locale=uk#" + encodeURIComponent(JSON.stringify(cfg));
+  const box = document.getElementById('chartBox');
+  box.innerHTML = `<iframe src="${src}" style="width:100%;height:100%;border:0;" allowtransparency="true"></iframe>`;
+  box.classList.add('show');
+  document.getElementById('chartNote').textContent = m === "OTC" || m === "STOCKS"
+    ? "Графік показує реальний ринок-орієнтир — точні OTC-котирування Pocket Option можуть відрізнятись"
+    : "";
+}
+
 function renderSignal(data){
   const box = document.getElementById('result');
   box.classList.add('show', data.direction === "BUY" ? "buy" : "sell");
@@ -278,6 +332,8 @@ function renderSignal(data){
     tag.textContent = r;
     reasonsEl.appendChild(tag);
   });
+
+  showChart(data.pair, mode, tf);
 }
 
 fillPairs();
