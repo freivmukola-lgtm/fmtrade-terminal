@@ -92,6 +92,12 @@
   .reason-tag{ font-size:10px; font-weight:700; padding:4px 9px; border-radius:8px;
     background:var(--panel-2); border:1px solid var(--line); color:var(--text); letter-spacing:0.3px; }
 
+  .suggested-exp{ margin-top:14px; display:flex; align-items:center; justify-content:space-between;
+    background:linear-gradient(120deg, rgba(232,53,47,0.12), rgba(143,23,18,0.12));
+    border:1px solid var(--gold-2); border-radius:12px; padding:12px 14px; }
+  .suggested-exp .lbl{ font-size:11px; color:var(--text-dim); }
+  .suggested-exp .val{ font-size:18px; font-weight:900; color:var(--gold-1); }
+
   .chart-box{ margin-top:16px; border-radius:14px; overflow:hidden; border:1px solid var(--line);
     height:280px; display:none; background:var(--panel-2); }
   .chart-box.show{ display:block; }
@@ -116,6 +122,18 @@
   .stats-card.win .val{ color:var(--buy); }
   .stats-card.loss .val{ color:var(--sell); }
   .stats-card.rate .val{ color:var(--gold-1); }
+
+  .history-item{ display:flex; align-items:center; justify-content:space-between;
+    padding:10px 0; border-bottom:1px solid var(--line); }
+  .history-item:last-child{ border-bottom:none; }
+  .history-left{ display:flex; flex-direction:column; gap:2px; }
+  .history-pair{ font-size:13px; font-weight:700; }
+  .history-time{ font-size:10px; color:var(--text-dim); }
+  .history-dir{ font-size:12px; font-weight:800; padding:3px 9px; border-radius:8px; }
+  .history-dir.buy{ background:rgba(62,207,126,0.15); color:var(--buy); }
+  .history-dir.sell{ background:rgba(232,84,79,0.15); color:var(--sell); }
+  .history-conf{ font-size:11px; color:var(--gold-1); font-weight:700; margin-left:8px; }
+  .history-empty{ text-align:center; color:var(--text-dim); font-size:12px; padding:20px 0; }
 
   .status{ text-align:center; font-size:12px; color:var(--text-dim); margin-top:14px; min-height:16px; }
 
@@ -177,6 +195,10 @@
         <div class="confidence-badge" id="resConfidence">—</div>
       </div>
       <div class="reasons-row" id="resReasons"></div>
+      <div class="suggested-exp" id="suggestedExp" style="display:none;">
+        <div class="lbl">🎯 Бот рекомендує експірацію</div>
+        <div class="val" id="suggestedExpVal">—</div>
+      </div>
       <div class="chart-box" id="chartBox"></div>
       <div class="chart-note" id="chartNote"></div>
       <div class="result-buttons">
@@ -191,6 +213,8 @@
         <div class="stats-card loss"><div class="val" id="statLosses">0</div><div class="lbl">Мінуси</div></div>
         <div class="stats-card rate"><div class="val" id="statRate">0%</div><div class="lbl">Вінрейт</div></div>
       </div>
+      <label class="field-label" style="margin-top:20px;">Останні сигнали</label>
+      <div id="historyList"></div>
     </div>
 
     <div class="status" id="statusMsg"></div>
@@ -275,14 +299,17 @@ function demoSignal(pair, auto){
   const dir = Math.random() > 0.5 ? "BUY" : "SELL";
   const demoReasons = ["OB","FVG","RSI","MACD","Breaker"];
   const pickedReasons = demoReasons.filter(()=>Math.random() > 0.5);
+  const conf = 60 + Math.floor(Math.random()*40);
+  const suggExp = conf >= 90 ? "1" : conf >= 80 ? "2" : conf >= 70 ? "3" : conf >= 50 ? "5" : "10";
   return {
     direction: dir,
     pair: auto ? PAIRS[mode][Math.floor(Math.random()*PAIRS[mode].length)] : pair,
     expiration: tf,
     trend: dir === "BUY" ? "Висхідний" : "Низхідний",
     strength: Math.ceil(Math.random()*4),
-    confidence: 60 + Math.floor(Math.random()*40),
-    reasons: (pickedReasons.length ? pickedReasons : ["Structure"]).join(", ")
+    confidence: conf,
+    reasons: (pickedReasons.length ? pickedReasons : ["Structure"]).join(", "),
+    suggested_expiration: suggExp
   };
 }
 
@@ -329,6 +356,36 @@ function loadStats(){
       document.getElementById('statRate').textContent = data.winrate + "%";
     })
     .catch(()=>{});
+
+  fetch(`${API_BASE}/api/history?limit=20`)
+    .then(r => r.json())
+    .then(list => {
+      const el = document.getElementById('historyList');
+      if(!list || list.length === 0){
+        el.innerHTML = '<div class="history-empty">Ще немає сигналів в історії</div>';
+        return;
+      }
+      el.innerHTML = "";
+      list.forEach(item=>{
+        const row = document.createElement('div');
+        row.className = "history-item";
+        const time = new Date(item.ts * 1000).toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit'});
+        row.innerHTML = `
+          <div class="history-left">
+            <div class="history-pair">${item.pair}</div>
+            <div class="history-time">${time} · ${item.mode}</div>
+          </div>
+          <div>
+            <span class="history-dir ${item.direction === 'BUY' ? 'buy' : 'sell'}">${item.direction}</span>
+            <span class="history-conf">${item.confidence != null ? item.confidence + '%' : ''}</span>
+          </div>
+        `;
+        el.appendChild(row);
+      });
+    })
+    .catch(()=>{
+      document.getElementById('historyList').innerHTML = '<div class="history-empty">Не вдалось завантажити історію</div>';
+    });
 }
 
 function toTVSymbol(pair, m){
@@ -351,6 +408,16 @@ function tfToInterval(t){
 }
 
 function showChart(pair, m, tfVal){
+  const box = document.getElementById('chartBox');
+  const noteEl = document.getElementById('chartNote');
+
+  if(m !== "FOREX"){
+    box.classList.remove('show');
+    box.innerHTML = "";
+    noteEl.textContent = "Графік недоступний для OTC/акцій — котирування Pocket Option синтетичні й не збігаються з реальним ринком";
+    return;
+  }
+
   const symbol = toTVSymbol(pair, m);
   const interval = tfToInterval(tfVal);
   const cfg = {
@@ -370,12 +437,9 @@ function showChart(pair, m, tfVal){
     allow_symbol_change: false
   };
   const src = "https://s.tradingview.com/embed-widget/advanced-chart/?locale=uk#" + encodeURIComponent(JSON.stringify(cfg));
-  const box = document.getElementById('chartBox');
   box.innerHTML = `<iframe src="${src}" style="width:100%;height:100%;border:0;" allowtransparency="true"></iframe>`;
   box.classList.add('show');
-  document.getElementById('chartNote').textContent = m === "OTC" || m === "STOCKS"
-    ? "Графік показує реальний ринок-орієнтир — точні OTC-котирування Pocket Option можуть відрізнятись"
-    : "";
+  noteEl.textContent = "";
 }
 
 function renderSignal(data){
@@ -413,6 +477,14 @@ function renderSignal(data){
     tag.textContent = r;
     reasonsEl.appendChild(tag);
   });
+
+  const suggBox = document.getElementById('suggestedExp');
+  if(data.suggested_expiration){
+    suggBox.style.display = "flex";
+    document.getElementById('suggestedExpVal').textContent = data.suggested_expiration + " хв";
+  } else {
+    suggBox.style.display = "none";
+  }
 
   showChart(data.pair, mode, tf);
 }
