@@ -97,6 +97,26 @@
   .chart-box.show{ display:block; }
   .chart-note{ font-size:10px; color:var(--text-dim); text-align:center; margin-top:6px; }
 
+  .result-buttons{ display:flex; gap:10px; margin-top:16px; }
+  .result-buttons button{ flex:1; padding:12px 0; border-radius:12px; border:1px solid var(--line);
+    background:var(--panel-2); font-size:14px; font-weight:800; cursor:pointer; }
+  .btn-win{ color:var(--buy); }
+  .btn-win.marked{ background:rgba(62,207,126,0.18); border-color:var(--buy); }
+  .btn-loss{ color:var(--sell); }
+  .btn-loss.marked{ background:rgba(232,84,79,0.18); border-color:var(--sell); }
+
+  .stats-view{ display:none; background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:18px; }
+  .stats-view.show{ display:block; }
+  .card.hide-card{ display:none; }
+  .stats-grid{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-top:16px; }
+  .stats-card{ background:var(--panel-2); border:1px solid var(--line); border-radius:12px;
+    padding:14px 10px; text-align:center; }
+  .stats-card .val{ font-size:22px; font-weight:900; }
+  .stats-card .lbl{ font-size:10px; color:var(--text-dim); text-transform:uppercase; margin-top:4px; letter-spacing:0.5px; }
+  .stats-card.win .val{ color:var(--buy); }
+  .stats-card.loss .val{ color:var(--sell); }
+  .stats-card.rate .val{ color:var(--gold-1); }
+
   .status{ text-align:center; font-size:12px; color:var(--text-dim); margin-top:14px; min-height:16px; }
 
   .nav{ display:flex; justify-content:space-around; margin-top:24px; padding-top:16px; border-top:1px solid var(--line); }
@@ -112,7 +132,7 @@
     <div class="brand-tag" id="modeTag">СИГНАЛИ</div>
   </div>
 
-  <div class="card">
+  <div class="card" id="card">
     <div class="seg">
       <button class="active" data-mode="FOREX" onclick="setMode('FOREX')">FOREX</button>
       <button data-mode="OTC" onclick="setMode('OTC')">OTC</button>
@@ -159,14 +179,26 @@
       <div class="reasons-row" id="resReasons"></div>
       <div class="chart-box" id="chartBox"></div>
       <div class="chart-note" id="chartNote"></div>
+      <div class="result-buttons">
+        <button class="btn-win" id="btnWin" onclick="markResult('win')">✅ Плюс</button>
+        <button class="btn-loss" id="btnLoss" onclick="markResult('loss')">❌ Мінус</button>
+      </div>
+    </div>
+
+    <div class="stats-view" id="statsView">
+      <div class="stats-grid">
+        <div class="stats-card win"><div class="val" id="statWins">0</div><div class="lbl">Плюси</div></div>
+        <div class="stats-card loss"><div class="val" id="statLosses">0</div><div class="lbl">Мінуси</div></div>
+        <div class="stats-card rate"><div class="val" id="statRate">0%</div><div class="lbl">Вінрейт</div></div>
+      </div>
     </div>
 
     <div class="status" id="statusMsg"></div>
   </div>
 
   <div class="nav">
-    <div class="active">Панель</div>
-    <div>Статистика</div>
+    <div class="active" id="navPanel" onclick="showPanel()">Панель</div>
+    <div id="navStats" onclick="showStats()">Статистика</div>
   </div>
 
 </div>
@@ -254,6 +286,51 @@ function demoSignal(pair, auto){
   };
 }
 
+let lastSignal = null;
+
+function markResult(result){
+  if(!lastSignal) return;
+  fetch(`${API_BASE}/api/result`, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      pair: lastSignal.pair,
+      mode: mode,
+      direction: lastSignal.direction,
+      result: result
+    })
+  }).catch(()=>{});
+
+  document.getElementById('btnWin').classList.toggle('marked', result === 'win');
+  document.getElementById('btnLoss').classList.toggle('marked', result === 'loss');
+}
+
+function showPanel(){
+  document.getElementById('statsView').classList.remove('show');
+  document.getElementById('card').classList.remove('hide-card');
+  document.getElementById('navPanel').classList.add('active');
+  document.getElementById('navStats').classList.remove('active');
+}
+
+function showStats(){
+  document.getElementById('statsView').classList.add('show');
+  document.getElementById('card').classList.add('hide-card');
+  document.getElementById('navStats').classList.add('active');
+  document.getElementById('navPanel').classList.remove('active');
+  loadStats();
+}
+
+function loadStats(){
+  fetch(`${API_BASE}/api/stats`)
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById('statWins').textContent = data.wins;
+      document.getElementById('statLosses').textContent = data.losses;
+      document.getElementById('statRate').textContent = data.winrate + "%";
+    })
+    .catch(()=>{});
+}
+
 function toTVSymbol(pair, m){
   const clean = pair.replace(" OTC", "");
   if(m === "STOCKS"){
@@ -302,6 +379,10 @@ function showChart(pair, m, tfVal){
 }
 
 function renderSignal(data){
+  lastSignal = data;
+  document.getElementById('btnWin').classList.remove('marked');
+  document.getElementById('btnLoss').classList.remove('marked');
+
   const box = document.getElementById('result');
   box.classList.add('show', data.direction === "BUY" ? "buy" : "sell");
   document.getElementById('resDir').textContent = data.direction === "BUY" ? "▲ BUY" : "▼ SELL";
