@@ -285,13 +285,19 @@ async function getSignal(auto){
   try{
     const url = `${API_BASE}/api/signal?pair=${encodeURIComponent(pair)}&mode=${mode}&expiration=${tf}&auto=${auto}`;
     const res = await fetch(url);
-    if(!res.ok) throw new Error("no backend");
+
+    if(res.status === 404){
+      statusEl.textContent = "Ще немає сигналу по цій парі — спробуй пізніше або іншу пару";
+      return;
+    }
+    if(!res.ok) throw new Error("backend error");
+
     const data = await res.json();
     renderSignal(data);
     statusEl.textContent = "";
   }catch(e){
     renderSignal(demoSignal(pair, auto));
-    statusEl.textContent = "⚠ Демо-режим: бекенд ще не підключено";
+    statusEl.textContent = "⚠ Демо-режим: бекенд недоступний";
   }
 }
 
