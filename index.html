@@ -235,7 +235,7 @@ const API_BASE = "https://web-production-acfff.up.railway.app";
 
 const PAIRS = {
   FOREX: ["EUR/USD","GBP/USD","USD/JPY","USD/CHF","USD/CAD","AUD/USD","NZD/USD","EUR/GBP","EUR/JPY","EUR/CHF","EUR/CAD","EUR/AUD","EUR/NZD","GBP/JPY","GBP/CHF","GBP/CAD","GBP/AUD","GBP/NZD","CHF/JPY","CAD/JPY","AUD/JPY","NZD/JPY","AUD/CHF","CAD/CHF","NZD/CHF","AUD/CAD","NZD/CAD","AUD/NZD"],
-  OTC:   ["EUR/USD OTC","GBP/USD OTC","USD/JPY OTC","AUD/CAD OTC","NZD/USD OTC","EUR/JPY OTC","USD/CHF OTC","EUR/GBP OTC","AUD/USD OTC","USD/CAD OTC","GBP/JPY OTC","EUR/CAD OTC","AUD/JPY OTC","NZD/JPY OTC","USD/TRY OTC","USD/ZAR OTC","USD/BDT OTC","USD/PKR OTC","USD/INR OTC","USD/EGP OTC"],
+  OTC:   ["EUR/USD OTC","GBP/USD OTC","USD/JPY OTC","AUD/CAD OTC","NZD/USD OTC","EUR/JPY OTC","USD/CHF OTC","EUR/GBP OTC","AUD/USD OTC","USD/CAD OTC","GBP/JPY OTC","EUR/CAD OTC","AUD/JPY OTC","NZD/JPY OTC","USD/TRY OTC","EUR/TRY OTC","USD/ZAR OTC","USD/BDT OTC","USD/PKR OTC","USD/INR OTC","USD/EGP OTC"],
   STOCKS: ["Apple OTC","Tesla OTC","Nvidia OTC","Amazon OTC","Microsoft OTC","Google OTC","Intel OTC","Palantir OTC"]
 };
 
@@ -279,11 +279,12 @@ function hideResult(){
 async function getSignal(auto){
   const statusEl = document.getElementById('statusMsg');
   const pair = document.getElementById('pairSelect').value;
+  const queryPair = pair.replace(" OTC", "");
   statusEl.textContent = "Аналізуємо ринок...";
   hideResult();
 
   try{
-    const url = `${API_BASE}/api/signal?pair=${encodeURIComponent(pair)}&mode=${mode}&expiration=${tf}&auto=${auto}`;
+    const url = `${API_BASE}/api/signal?pair=${encodeURIComponent(queryPair)}&mode=${mode}&expiration=${tf}&auto=${auto}`;
     const res = await fetch(url);
 
     if(res.status === 404){
@@ -323,11 +324,12 @@ let lastSignal = null;
 
 function markResult(result){
   if(!lastSignal) return;
+  const queryPair = (lastSignal.pair || "").replace(" OTC", "");
   fetch(`${API_BASE}/api/result`, {
     method: "POST",
     headers: {"Content-Type": "application/json"},
     body: JSON.stringify({
-      pair: lastSignal.pair,
+      pair: queryPair,
       mode: mode,
       direction: lastSignal.direction,
       result: result
@@ -337,7 +339,6 @@ function markResult(result){
   document.getElementById('btnWin').classList.toggle('marked', result === 'win');
   document.getElementById('btnLoss').classList.toggle('marked', result === 'loss');
 }
-
 function showPanel(){
   document.getElementById('statsView').classList.remove('show');
   document.getElementById('card').classList.remove('hide-card');
