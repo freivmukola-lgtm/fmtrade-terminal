@@ -242,6 +242,10 @@ const PAIRS = {
 let mode = "FOREX";
 let tf = "1";
 
+function apiMode(m){
+  return m === "FOREX" ? "LIVE" : m;
+}
+
 function setMode(m){
   mode = m;
   document.querySelectorAll('.seg button').forEach(b=>b.classList.toggle('active', b.dataset.mode===m));
@@ -284,7 +288,7 @@ async function getSignal(auto){
   hideResult();
 
   try{
-    const url = `${API_BASE}/api/signal?pair=${encodeURIComponent(queryPair)}&mode=${mode}&expiration=${tf}&auto=${auto}`;
+    const url = `${API_BASE}/api/signal?pair=${encodeURIComponent(queryPair)}&mode=${apiMode(mode)}&expiration=${tf}&auto=${auto}`;
     const res = await fetch(url);
 
     if(res.status === 404){
@@ -330,7 +334,7 @@ function markResult(result){
     headers: {"Content-Type": "application/json"},
     body: JSON.stringify({
       pair: queryPair,
-      mode: mode,
+      mode: apiMode(mode),
       direction: lastSignal.direction,
       result: result
     })
