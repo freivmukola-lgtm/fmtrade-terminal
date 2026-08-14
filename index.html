@@ -464,7 +464,9 @@ function renderSignal(data){
   document.getElementById('resPair').textContent = data.pair;
   document.getElementById('resExp').textContent = data.expiration + " хв";
   document.getElementById('resTrend').textContent = data.trend || "—";
-  document.getElementById('resTime').textContent = new Date().toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit'});
+  document.getElementById('resTime').textContent = data.age_minutes != null
+    ? (data.age_minutes <= 0 ? "щойно" : data.age_minutes + " хв тому")
+    : new Date().toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit'});
 
   const strengthEl = document.getElementById('resStrength');
   strengthEl.innerHTML = "";
