@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>FM Trade Terminal</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/lightweight-charts/4.1.3/lightweight-charts.standalone.production.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <style>
   :root{
     --bg: #0a0708;
@@ -72,33 +72,7 @@
   .or-div::before, .or-div::after{ content:""; flex:1; height:1px; background:var(--line); }
 
   .result{ margin-top:18px; border-radius:16px; padding:18px; display:none; }
-  .result.show{ display:block; animation:fadeIn .25s ease; }
-  @keyframes fadeIn{ from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);} }
-  .result.buy{ background:rgba(62,207,126,0.10); border:1px solid rgba(62,207,126,0.35); }
-  .result.sell{ background:rgba(226,85,79,0.10); border:1px solid rgba(226,85,79,0.35); }
-  .res-dir{ font-size:26px; font-weight:900; letter-spacing:1px; }
-  .result.buy .res-dir{ color:var(--buy); }
-  .result.sell .res-dir{ color:var(--sell); }
-  .res-meta{ margin-top:10px; display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:13px; }
-  .res-meta div span{ display:block; color:var(--text-dim); font-size:10px; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px; }
-  .strength{ margin-top:12px; display:flex; gap:4px; }
-  .strength i{ flex:1; height:5px; border-radius:3px; background:var(--line); }
-  .strength i.on{ background:var(--gold-1); }
-
-  .confidence-row{ display:flex; align-items:center; justify-content:space-between; margin-top:14px; }
-  .confidence-label{ font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.5px; }
-  .confidence-badge{ font-size:15px; font-weight:900; padding:3px 12px; border-radius:20px; }
-  .confidence-badge.high{ background:rgba(62,207,126,0.18); color:#3ecf7e; }
-  .confidence-badge.mid{ background:rgba(232,196,45,0.18); color:#e8c42d; }
-  .confidence-badge.low{ background:rgba(147,128,127,0.18); color:var(--text-dim); }
-
-  .reasons-row{ margin-top:10px; display:flex; flex-wrap:wrap; gap:6px; }
-  .reason-tag{ font-size:10px; font-weight:700; padding:4px 9px; border-radius:8px;
-    background:var(--panel-2); border:1px solid var(--line); color:var(--text); letter-spacing:0.3px; }
-
-  .suggested-exp{ margin-top:14px; display:flex; align-items:center; justify-content:space-between;
-    background:linear-gradient(120deg, rgba(232,53,47,0.12), rgba(143,23,18,0.12));
-    border:1px solid var(--gold-2); border-radius:12px; padding:12px 14px; }
+  .result.show{ display:block; animation:fadeIn .25s    border:1px solid var(--gold-2); border-radius:12px; padding:12px 14px; }
   .suggested-exp .lbl{ font-size:11px; color:var(--text-dim); }
   .suggested-exp .val{ font-size:18px; font-weight:900; color:var(--gold-1); }
 
@@ -166,7 +140,8 @@
     <div class="brand-name">FM TRADE</div>
     <div class="brand-tag" id="modeTag">СИГНАЛИ</div>
   </div>
-    <div class="card" id="card">
+
+  <div class="card" id="card">
     <div class="seg">
       <button class="active" data-mode="FOREX" onclick="setMode('FOREX')">FOREX</button>
       <button data-mode="OTC" onclick="setMode('OTC')">OTC</button>
@@ -195,9 +170,7 @@
     <div class="chart-box show" id="chartBox">
       <div class="chart-canvas" id="chartCanvas"></div>
     </div>
-    <div class="chart-note" id="chartNote"></div>
-
-    <button class="btn btn-primary" onclick="getSignal(false)">⚡ Отримати сигнал</button>
+    <div class="chart-note" id="chartNote"></div>    <button class="btn btn-primary" onclick="getSignal(false)">⚡ Отримати сигнал</button>
     <div class="or-div">АБО</div>
     <button class="btn btn-secondary" onclick="getSignal(true)">✦ Автосигнал</button>
 
@@ -297,7 +270,6 @@ function fillPairs(){
   });
   onPairChange();
 }
-
 function onPairChange(){
   loadChart();
 }
@@ -307,7 +279,10 @@ function hideResult(){
 }
 
 function initChartIfNeeded(){
-  if (chart) return;
+  if (chart) return true;
+  if (typeof LightweightCharts === "undefined") {
+    return false;
+  }
   const container = document.getElementById('chartCanvas');
   chart = LightweightCharts.createChart(container, {
     layout: {
@@ -335,6 +310,7 @@ function initChartIfNeeded(){
     const { width, height } = entries[0].contentRect;
     chart.applyOptions({ width, height });
   }).observe(container);
+  return true;
 }
 
 async function loadChart(){
@@ -360,7 +336,13 @@ async function loadChart(){
     }
 
     canvasEl.innerHTML = "";
-    initChartIfNeeded();
+    const ready = initChartIfNeeded();
+    if (!ready) {
+      canvasEl.innerHTML = '<div class="chart-empty">Бібліотека графіка не завантажилась.<br>Перевір інтернет-з\'єднання й онови сторінку.</div>';
+      noteEl.textContent = "";
+      priceDot.classList.add('stale');
+      return;
+    }
 
     const data = await res.json();
     const candles = data.candles.map(c => ({
@@ -385,7 +367,6 @@ async function loadChart(){
     noteEl.textContent = "Не вдалось завантажити графік";
   }
 }
-
 async function getSignal(auto){
   const statusEl = document.getElementById('statusMsg');
   const pair = document.getElementById('pairSelect').value;
@@ -415,7 +396,7 @@ async function getSignal(auto){
 }
 
 function syncPairSelectToSignal(signalPair){
-    if(!signalPair) return;
+  if(!signalPair) return;
   const sel = document.getElementById('pairSelect');
   const options = Array.from(sel.options).map(o => o.value);
   const withOtc = signalPair + " OTC";
@@ -482,7 +463,7 @@ function loadStats(){
       el.innerHTML = "";
       list.forEach(item=>{
         const row = document.createElement('div');
-        row.className = "pair-stat-item";
+        row.className = "pair-stat-item";        row.className = "pair-stat-item";
         const cls = item.winrate >= 60 ? "high" : item.winrate >= 45 ? "mid" : "low";
         row.innerHTML = `
           <div>
@@ -581,4 +562,29 @@ if (chartPollTimer) clearInterval(chartPollTimer);
 chartPollTimer = setInterval(loadChart, 15000);
 </script>
 </body>
-</html>
+</html>ase; }
+  @keyframes fadeIn{ from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);} }
+  .result.buy{ background:rgba(62,207,126,0.10); border:1px solid rgba(62,207,126,0.35); }
+  .result.sell{ background:rgba(226,85,79,0.10); border:1px solid rgba(226,85,79,0.35); }
+  .res-dir{ font-size:26px; font-weight:900; letter-spacing:1px; }
+  .result.buy .res-dir{ color:var(--buy); }
+  .result.sell .res-dir{ color:var(--sell); }
+  .res-meta{ margin-top:10px; display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:13px; }
+  .res-meta div span{ display:block; color:var(--text-dim); font-size:10px; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px; }
+  .strength{ margin-top:12px; display:flex; gap:4px; }
+  .strength i{ flex:1; height:5px; border-radius:3px; background:var(--line); }
+  .strength i.on{ background:var(--gold-1); }
+
+  .confidence-row{ display:flex; align-items:center; justify-content:space-between; margin-top:14px; }
+  .confidence-label{ font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.5px; }
+  .confidence-badge{ font-size:15px; font-weight:900; padding:3px 12px; border-radius:20px; }
+  .confidence-badge.high{ background:rgba(62,207,126,0.18); color:#3ecf7e; }
+  .confidence-badge.mid{ background:rgba(232,196,45,0.18); color:#e8c42d; }
+  .confidence-badge.low{ background:rgba(147,128,127,0.18); color:var(--text-dim); }
+
+  .reasons-row{ margin-top:10px; display:flex; flex-wrap:wrap; gap:6px; }
+  .reason-tag{ font-size:10px; font-weight:700; padding:4px 9px; border-radius:8px;
+    background:var(--panel-2); border:1px solid var(--line); color:var(--text); letter-spacing:0.3px; }
+
+  .suggested-exp{ margin-top:14px; display:flex; align-items:center; justify-content:space-between;
+    background:linear-gradient(120deg, rgba(232,53,47,0.12), rgba(143,23,18,0.12));
