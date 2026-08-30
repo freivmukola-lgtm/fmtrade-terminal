@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>FM Trade Terminal</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lightweight-charts/4.1.3/lightweight-charts.standalone.production.js"></script>
 <style>
   :root{
     --bg: #0a0708;
@@ -56,6 +57,9 @@
     padding:14px 16px; margin-top:16px; }
   .price-left{ display:flex; align-items:center; gap:8px; color:var(--text-dim); font-size:12px; letter-spacing:0.5px; }
   .dot{ width:7px; height:7px; border-radius:50%; background:var(--buy); box-shadow:0 0 8px var(--buy); }
+  .dot.stale{ background:var(--text-dim); box-shadow:none; animation:none; }
+  .dot{ animation:pulse 2s infinite; }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:0.35;} }
   .price-val{ font-size:19px; font-weight:700; color:var(--gold-1); }
 
   .btn{ width:100%; border:none; border-radius:14px; padding:16px 0; font-size:15px; font-weight:800;
@@ -99,8 +103,11 @@
   .suggested-exp .val{ font-size:18px; font-weight:900; color:var(--gold-1); }
 
   .chart-box{ margin-top:16px; border-radius:14px; overflow:hidden; border:1px solid var(--line);
-    height:280px; display:none; background:var(--panel-2); }
+    height:280px; display:none; background:var(--panel-2); position:relative; }
   .chart-box.show{ display:block; }
+  .chart-canvas{ width:100%; height:100%; }
+  .chart-empty{ display:flex; align-items:center; justify-content:center; height:100%;
+    color:var(--text-dim); font-size:12px; text-align:center; padding:16px; line-height:1.6; }
   .chart-note{ font-size:10px; color:var(--text-dim); text-align:center; margin-top:6px; }
 
   .result-buttons{ display:flex; gap:10px; margin-top:16px; }
@@ -159,15 +166,14 @@
     <div class="brand-name">FM TRADE</div>
     <div class="brand-tag" id="modeTag">СИГНАЛИ</div>
   </div>
-
-  <div class="card" id="card">
+    <div class="card" id="card">
     <div class="seg">
       <button class="active" data-mode="FOREX" onclick="setMode('FOREX')">FOREX</button>
       <button data-mode="OTC" onclick="setMode('OTC')">OTC</button>
     </div>
 
     <label class="field-label">Торгова пара</label>
-    <select class="pair-select" id="pairSelect"></select>
+    <select class="pair-select" id="pairSelect" onchange="onPairChange()"></select>
 
     <label class="field-label">Експірація</label>
     <div class="tf-row" id="tfRow">
@@ -182,9 +188,14 @@
     </div>
 
     <div class="price-row">
-      <div class="price-left"><span class="dot"></span> ПОТОЧНА ЦІНА</div>
+      <div class="price-left"><span class="dot" id="priceDot"></span> ПОТОЧНА ЦІНА</div>
       <div class="price-val" id="priceVal">—</div>
     </div>
+
+    <div class="chart-box show" id="chartBox">
+      <div class="chart-canvas" id="chartCanvas"></div>
+    </div>
+    <div class="chart-note" id="chartNote"></div>
 
     <button class="btn btn-primary" onclick="getSignal(false)">⚡ Отримати сигнал</button>
     <div class="or-div">АБО</div>
@@ -208,8 +219,6 @@
         <div class="lbl">🎯 Бот рекомендує експірацію</div>
         <div class="val" id="suggestedExpVal">—</div>
       </div>
-      <div class="chart-box" id="chartBox"></div>
-      <div class="chart-note" id="chartNote"></div>
       <div class="result-buttons">
         <button class="btn-win" id="btnWin" onclick="markResult('win')">✅ Плюс</button>
         <button class="btn-loss" id="btnLoss" onclick="markResult('loss')">❌ Мінус</button>
@@ -247,14 +256,21 @@ const API_BASE = "https://web-production-acfff.up.railway.app";
 
 const PAIRS = {
   FOREX: ["EUR/USD","GBP/USD","USD/JPY","USD/CHF","USD/CAD","AUD/USD","NZD/USD","EUR/GBP","EUR/JPY","EUR/CHF","EUR/CAD","EUR/AUD","EUR/NZD","GBP/JPY","GBP/CHF","GBP/CAD","GBP/AUD","GBP/NZD","CHF/JPY","CAD/JPY","AUD/JPY","NZD/JPY","AUD/CHF","CAD/CHF","NZD/CHF","AUD/CAD","NZD/CAD","AUD/NZD"],
-  OTC:   ["EUR/USD OTC","GBP/USD OTC","USD/JPY OTC","AUD/CAD OTC","NZD/USD OTC","EUR/JPY OTC","USD/CHF OTC","EUR/GBP OTC","AUD/USD OTC","USD/CAD OTC","GBP/JPY OTC","EUR/CAD OTC","AUD/JPY OTC","NZD/JPY OTC","USD/TRY OTC","EUR/TRY OTC","USD/ZAR OTC","USD/BDT OTC","USD/PKR OTC","USD/INR OTC","USD/EGP OTC"]
+  OTC:   ["EUR/USD OTC","GBP/USD OTC","USD/JPY OTC","AUD/CAD OTC","NZD/USD OTC","EUR/JPY OTC","USD/CHF OTC","EUR/GBP OTC","AUD/USD OTC","USD/CAD OTC","GBP/JPY OTC","EUR/CAD OTC","AUD/JPY OTC","NZD/JPY OTC","CAD/JPY OTC","CHF/JPY OTC","EUR/AUD OTC","GBP/CAD OTC"]
 };
 
 let mode = "FOREX";
 let tf = "1";
+let chart = null;
+let candleSeries = null;
+let chartPollTimer = null;
 
 function apiMode(m){
   return m === "FOREX" ? "LIVE" : m;
+}
+
+function pairToApiSymbol(pair){
+  return pair.replace(" OTC", "").replace("/", "").toUpperCase();
 }
 
 function setMode(m){
@@ -279,24 +295,104 @@ function fillPairs(){
     opt.value = p; opt.textContent = p;
     sel.appendChild(opt);
   });
-  updatePrice();
+  onPairChange();
 }
 
-function updatePrice(){
-  const base = 1.0500 + Math.random()*0.15;
-  document.getElementById('priceVal').textContent = base.toFixed(5);
+function onPairChange(){
+  loadChart();
 }
 
 function hideResult(){
   document.getElementById('result').classList.remove('show','buy','sell');
 }
 
+function initChartIfNeeded(){
+  if (chart) return;
+  const container = document.getElementById('chartCanvas');
+  chart = LightweightCharts.createChart(container, {
+    layout: {
+      background: { color: "transparent" },
+      textColor: "#93807f",
+      fontSize: 10,
+    },
+    grid: {
+      vertLines: { color: "#241619" },
+      horzLines: { color: "#241619" },
+    },
+    rightPriceScale: { borderColor: "#2e1b1e" },
+    timeScale: { borderColor: "#2e1b1e", timeVisible: true, secondsVisible: false },
+  });
+  candleSeries = chart.addCandlestickSeries({
+    upColor: "#3ecf7e",
+    downColor: "#e8352f",
+    borderUpColor: "#3ecf7e",
+    borderDownColor: "#e8352f",
+    wickUpColor: "#3ecf7e",
+    wickDownColor: "#e8352f",
+  });
+  new ResizeObserver(entries => {
+    if (entries.length === 0) return;
+    const { width, height } = entries[0].contentRect;
+    chart.applyOptions({ width, height });
+  }).observe(container);
+}
+
+async function loadChart(){
+  const pair = document.getElementById('pairSelect').value;
+  const symbol = pairToApiSymbol(pair);
+  const apiMd = apiMode(mode);
+  const noteEl = document.getElementById('chartNote');
+  const canvasEl = document.getElementById('chartCanvas');
+  const priceDot = document.getElementById('priceDot');
+  const priceVal = document.getElementById('priceVal');
+
+  try {
+    const url = `${API_BASE}/api/candles?pair=${encodeURIComponent(symbol)}&mode=${encodeURIComponent(apiMd)}`;
+    const res = await fetch(url);
+
+    if (!res.ok) {
+      if (candleSeries) candleSeries.setData([]);
+      canvasEl.innerHTML = '<div class="chart-empty">Ще немає даних для ' + pair + '.<br>Бот ще збирає перші свічки — заглянь трохи пізніше.</div>';
+      noteEl.textContent = "";
+      priceDot.classList.add('stale');
+      priceVal.textContent = "—";
+      return;
+    }
+
+    canvasEl.innerHTML = "";
+    initChartIfNeeded();
+
+    const data = await res.json();
+    const candles = data.candles.map(c => ({
+      time: c.time, open: c.open, high: c.high, low: c.low, close: c.close,
+    }));
+    candleSeries.setData(candles);
+    chart.timeScale().fitContent();
+
+    const last = candles[candles.length - 1];
+    priceVal.textContent = last.close.toFixed(5);
+
+    if (data.age_seconds < 90) {
+      priceDot.classList.remove('stale');
+      noteEl.textContent = "Реальні дані Pocket Option · оновлено щойно";
+    } else {
+      priceDot.classList.add('stale');
+      const mins = Math.floor(data.age_seconds / 60);
+      noteEl.textContent = "Реальні дані Pocket Option · " + mins + " хв тому";
+    }
+  } catch (e) {
+    priceDot.classList.add('stale');
+    noteEl.textContent = "Не вдалось завантажити графік";
+  }
+}
+
 async function getSignal(auto){
   const statusEl = document.getElementById('statusMsg');
   const pair = document.getElementById('pairSelect').value;
-  const queryPair = pair.replace(" OTC", "");
+  const queryPair = pairToApiSymbol(pair);
   statusEl.textContent = "Аналізуємо ринок...";
   hideResult();
+  loadChart();
 
   try{
     const url = `${API_BASE}/api/signal?pair=${encodeURIComponent(queryPair)}&mode=${apiMode(mode)}&expiration=${tf}&auto=${auto}`;
@@ -311,35 +407,30 @@ async function getSignal(auto){
     const data = await res.json();
     renderSignal(data);
     statusEl.textContent = "";
+    syncPairSelectToSignal(data.pair);
+    loadChart();
   }catch(e){
-    renderSignal(demoSignal(pair, auto));
-    statusEl.textContent = "⚠ Демо-режим: бекенд недоступний";
+    statusEl.textContent = "⚠ Бекенд недоступний, спробуй пізніше";
   }
 }
 
-function demoSignal(pair, auto){
-  const dir = Math.random() > 0.5 ? "BUY" : "SELL";
-  const demoReasons = ["OB","FVG","RSI","MACD","Breaker"];
-  const pickedReasons = demoReasons.filter(()=>Math.random() > 0.5);
-  const conf = 60 + Math.floor(Math.random()*40);
-  const suggExp = conf >= 90 ? "1" : conf >= 80 ? "2" : conf >= 70 ? "3" : conf >= 50 ? "5" : "10";
-  return {
-    direction: dir,
-    pair: auto ? PAIRS[mode][Math.floor(Math.random()*PAIRS[mode].length)] : pair,
-    expiration: tf,
-    trend: dir === "BUY" ? "Висхідний" : "Низхідний",
-    strength: Math.ceil(Math.random()*4),
-    confidence: conf,
-    reasons: (pickedReasons.length ? pickedReasons : ["Structure"]).join(", "),
-    suggested_expiration: suggExp
-  };
+function syncPairSelectToSignal(signalPair){
+    if(!signalPair) return;
+  const sel = document.getElementById('pairSelect');
+  const options = Array.from(sel.options).map(o => o.value);
+  const withOtc = signalPair + " OTC";
+  if(options.includes(signalPair)){
+    sel.value = signalPair;
+  } else if(options.includes(withOtc)){
+    sel.value = withOtc;
+  }
 }
 
 let lastSignal = null;
 
 function markResult(result){
   if(!lastSignal) return;
-  const queryPair = (lastSignal.pair || "").replace(" OTC", "");
+  const queryPair = pairToApiSymbol(lastSignal.pair || "");
   fetch(`${API_BASE}/api/result`, {
     method: "POST",
     headers: {"Content-Type": "application/json"},
@@ -438,52 +529,6 @@ function loadStats(){
     });
 }
 
-function toTVSymbol(pair, m){
-  const clean = pair.replace(" OTC", "");
-  const fx = clean.replace("/", "");
-  return "FX:" + fx;
-}
-
-function tfToInterval(t){
-  const map = {"1":"1","2":"1","3":"1","5":"5","10":"5","15":"15"};
-  return map[t] || "1";
-}
-
-function showChart(pair, m, tfVal){
-  const box = document.getElementById('chartBox');
-  const noteEl = document.getElementById('chartNote');
-
-  if(m !== "FOREX"){
-    box.classList.remove('show');
-    box.innerHTML = "";
-    noteEl.textContent = "Графік недоступний для OTC/акцій — котирування Pocket Option синтетичні й не збігаються з реальним ринком";
-    return;
-  }
-
-  const symbol = toTVSymbol(pair, m);
-  const interval = tfToInterval(tfVal);
-  const cfg = {
-    autosize: true,
-    symbol: symbol,
-    interval: interval,
-    timezone: "Etc/UTC",
-    theme: "dark",
-    style: "1",
-    locale: "uk",
-    toolbar_bg: "#150f10",
-    hide_top_toolbar: true,
-    hide_legend: false,
-    save_image: false,
-    backgroundColor: "#150f10",
-    gridColor: "rgba(46,27,30,0.6)",
-    allow_symbol_change: false
-  };
-  const src = "https://s.tradingview.com/embed-widget/advanced-chart/?locale=uk#" + encodeURIComponent(JSON.stringify(cfg));
-  box.innerHTML = `<iframe src="${src}" style="width:100%;height:100%;border:0;" allowtransparency="true"></iframe>`;
-  box.classList.add('show');
-  noteEl.textContent = "";
-}
-
 function renderSignal(data){
   lastSignal = data;
   document.getElementById('btnWin').classList.remove('marked');
@@ -529,12 +574,11 @@ function renderSignal(data){
   } else {
     suggBox.style.display = "none";
   }
-
-  showChart(data.pair, mode, tf);
 }
 
 fillPairs();
-setInterval(updatePrice, 4000);
+if (chartPollTimer) clearInterval(chartPollTimer);
+chartPollTimer = setInterval(loadChart, 15000);
 </script>
 </body>
 </html>
